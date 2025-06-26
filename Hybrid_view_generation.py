@@ -2,12 +2,9 @@
 # coding: utf-8
 
 # # Hybrid Black-Litterman Portfolio Optimization
-# ## ARMA-GARCH and SVR Approach for Quantitative View Generation
 # 
-# This notebook implements the hybrid approach from "A Hybrid Approach for Generating Investor Views in Black-Litterman Model" by Yebei-Rong.
+# Implementation of the hybrid approach from "A Hybrid Approach for Generating Investor Views in Black-Litterman Model".
 # The methodology replaces subjective views with a systematic pipeline: ARMA-GARCH → SVR → Black-Litterman
-
-
 
 # ### 1. Import Libraries and Setup
 
@@ -62,11 +59,20 @@ class DataProcessor:
     def fetch_data(self):
         """Fetch historical price data"""
         print(f"Fetching data for {self.tickers} from {self.start_date} to {self.end_date}")
-        self.prices = yf.download(self.tickers, start=self.start_date, end=self.end_date)['Close']
+        # Download price data
+        data = yf.download(self.tickers, start=self.start_date, end=self.end_date)
         
-        # Handle single ticker case
+        # Extract adjusted close prices
         if len(self.tickers) == 1:
-            self.prices = self.prices.to_frame(self.tickers[0])
+            # Single ticker case
+            self.prices = data['Close'].to_frame(self.tickers[0])
+        else:
+            # Multiple tickers
+            self.prices = data['Close']
+            
+        # Ensure prices is a DataFrame with proper column names
+        if isinstance(self.prices, pd.Series):
+            self.prices = self.prices.to_frame()
             
         # Calculate returns
         self.returns = self.prices.pct_change().dropna()
@@ -118,7 +124,7 @@ class DataProcessor:
             indicators_df['SMA'] = talib.SMA(close_num, timeperiod=20)
             
             # 6. Hurst Exponent (simplified version)
-            indicators_df['Hurst'] = self._calculate_hurst_exponent(close, window=100) #ovo cu odjebat jer nez koji je to penis
+            indicators_df['Hurst'] = self._calculate_hurst_exponent(close, window=100)
             
             # 7. RSI (Relative Strength Index) - 14 days
             indicators_df['RSI'] = talib.RSI(close_num, timeperiod=14)
@@ -557,8 +563,7 @@ class SVRViewGenerator:
             
             # Calculate uncertainty based on support vectors distance
             # Simplified approach: use fixed uncertainty based on training performance
-            # In practice, you might want to use prediction intervals
-            uncertainty = 0  # 2% base uncertainty #TODO Im going with 0
+            uncertainty = 0  # Im going with 0% uncertanty for now
             
             views[ticker] = return_prediction
             uncertainties[ticker] = uncertainty
@@ -594,33 +599,26 @@ class HybridBlackLitterman:
 
         print(prices_data.shape)
         print(prices_data)
-
-        #print(market_caps.shape)
         
         # Calculate covariance matrix
-        self.cov_matrix = risk_models.CovarianceShrinkage(prices_data).ledoit_wolf() #TODO mijenjao
+        self.cov_matrix = risk_models.CovarianceShrinkage(prices_data).ledoit_wolf() 
         
         # Calculate market-implied returns (equilibrium returns)
-        # Using equal weights as market cap proxy
-        market_caps = pd.Series([100000000.0] * len(tickers), index=tickers) #TODO OVO SAM ZABORAVIO AAAAA (vidjetcemo dal mi radi)
-        # moram market capove kak spada racunat... nez dal ovo ista ima smisla...
+        market_caps = pd.Series([100000000.0] * len(tickers), index=tickers)
 
         print(market_caps)
         self.market_prior = market_implied_prior_returns(
             market_caps=market_caps,
             risk_aversion=self.risk_aversion,
             cov_matrix=self.cov_matrix,
-            risk_free_rate=0.04 #TODO mijenjao
+            risk_free_rate=0.04 
         )
         
-        # CRITICAL FIX: Use ticker names as keys, not numeric indices
+        # Use ticker names as keys, not numeric indices
         absolute_views = {}
         
         for ticker, view_return in views.items():
-            if ticker in tickers:  # Only include views for tickers in our universe
-                #absolute_views[ticker] = view_return * 252  # Annualize
-                # Views are cumulative returns over holding period
-                # Annualize them properly for Black-Litterman
+            if ticker in tickers:  
                 annualized_view = ((1 + view_return) ** (252 / holding_period)) - 1
                 
                 # Sanity check - cap at reasonable annual returns
@@ -648,7 +646,6 @@ class HybridBlackLitterman:
         print(self.tau)        
         # Create Black-Litterman model with ticker-keyed views
 
-        #absolute_views = {'AAPL': np.float64(0.8), 'MSFT': np.float64(0.5)}
         self.bl_model = BlackLittermanModel(
             cov_matrix=self.cov_matrix,
             pi=self.market_prior,
@@ -671,23 +668,16 @@ class HybridBlackLitterman:
         # Optimize portfolio using Efficient Frontier
         ef = EfficientFrontier(self.posterior_returns, posterior_cov)
         
-        # Add constraintsm #TODO, MIJENJAO
+        # Add constraints
         #ef.add_constraint(lambda w: w >= 0)  # Long-only
-        #ef.add_constraint(lambda w: w <= 0.45)  # Max 35% per asset ##TODO mijenjao
+        #ef.add_constraint(lambda w: w <= 0.35)  # Max 35% per asset
         
         # Maximize Sharpe ratio
-        # try: TODO mijenjao PUNO MIJANJAO
         ef.max_sharpe()
         self.optimal_weights = ef.clean_weights()
-        #self.optimal_weights = self.bl_model.weights
         
         # Convert to numpy array in ticker order
         return np.array([self.optimal_weights[ticker] for ticker in tickers])
-            
-        # except Exception as e:
-        #     print(f"Optimization failed: {e}")
-        #     # Return equal weights as fallback
-        #     return np.array([1/len(tickers)] * len(tickers))
 
 # ### 6. Backtesting Framework
 
@@ -708,6 +698,8 @@ class HybridBacktester:
         self.benchmark_values = []
         self.benchmark_returns = []
         self.benchmark_weights = None
+
+        self.test_start_date = None
     
     def plot_portfolio_weights_detailed(self):
         """
@@ -886,6 +878,9 @@ class HybridBacktester:
         """
         print(f"\nRunning backtest from {test_start} to {test_end}")
         print(f"Holding period: {self.holding_period} days")
+
+        # Store test start date
+        self.test_start_date = pd.to_datetime(test_start)
         
         # Calculate benchmark weights (market cap weighted)
         print("\nCalculating market cap weights for benchmark...")
@@ -997,10 +992,10 @@ class HybridBacktester:
                 )
             
             # Store weights
-            # self.weights_history.append({
-            #     'date': current_date,
-            #     'weights': dict(zip(self.data_processor.tickers, optimal_weights)) // TODO!!
-            # })
+            self.weights_history.append({
+                'date': current_date,
+                'weights': dict(zip(self.data_processor.tickers, optimal_weights)) # TODO!!
+            })
             self.rebalance_dates.append(current_date)
             
             # Calculate portfolio returns for holding period
@@ -1107,7 +1102,7 @@ class HybridBacktester:
         fig, axes = plt.subplots(4, 1, figsize=(14, 16))
         
         # Create date index for plotting
-        dates = pd.date_range(start=self.data_processor.returns.index[0], 
+        dates = pd.date_range(start=self.test_start_date, 
                             periods=len(self.portfolio_values), 
                             freq='D')[:len(self.portfolio_values)]
         
@@ -1184,7 +1179,7 @@ class HybridBacktester:
             np.sqrt(252)
         ).iloc[window:]
         
-        axes[3].plot(rolling_dates[1:], rolling_sharpe, label='Hybrid BL Portfolio', ## ovo sam morao da stavim [1:] da ne bi bilo NaN na pocetku
+        axes[3].plot(rolling_dates[1:], rolling_sharpe, label='Hybrid BL Portfolio',
                     linewidth=2.5, color='darkblue')
         axes[3].plot(rolling_dates[1:], bench_rolling_sharpe, label='Benchmark', 
                     linewidth=2.5, color='darkred', alpha=0.8)
@@ -1208,21 +1203,12 @@ def run_hybrid_black_litterman():
     """
     Main function to run the complete hybrid Black-Litterman strategy
     """
-    # I'VE PUT A LOT OF TICKERS HERE
     # Configuration
     # TICKERS = [
     # 'AAPL', 'MSFT', 'AMGN', 'AXP', 'BA', 'CAT', 'CRM', 'CSCO', 'CVX', 'DIS',
     #  'GS', 'HD', 'HON', 'IBM', 'INTC', 'JNJ', 'JPM', 'KO', 'MCD',
     # 'MMM', 'MRK', 'NKE', 'PG', 'TRV', 'UNH',  'VZ', 'WBA', 'WMT'
     # ]
-    
-    #MORAM PISAT STA SAM PROMIJENIO U RUNNEVIMA... ZNACI ZADNJI JE BIO KRIMINALAN...
-    #MORAM SE SJETIT STSA JE BILO PA VRACAM NA SAMO OVE DOLJE TICKERE I KRATKO VRIJEME (OVO TRECE)
-    #OPET KRIMINAL...
-    #IDEM SAD SAMO S OVIM MANJIM TIKERIMA I NAJMANJIM VREMENOM
-    #DA... MANJIO T
-    #Idzorek spasio stvar... jebeno je ispalo s najmanjim vremenom i manjim tickerima
-    #Idem sad samo jos jednom probati s puno tickera i puno vremena
 
     TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'JPM', 'JNJ', 'XOM', 'PG']
     # TRAIN_START = '1995-01-01'
@@ -1231,13 +1217,13 @@ def run_hybrid_black_litterman():
     # TEST_END = '2024-01-01'
 
     # TRAIN_START = '2010-01-01'
-    # TRAIN_END = '2015-12-31'
-    # TEST_START = '2016-01-01'
+    # TRAIN_END = '2016-12-31'
+    # TEST_START = '2017-01-01'
     # TEST_END = '2023-12-31'
 
     TRAIN_START = '2013-01-01'
-    TRAIN_END = '2020-12-31'
-    TEST_START = '2021-01-01'
+    TRAIN_END = '2018-12-31'
+    TEST_START = '2019-01-01'
     TEST_END = '2023-12-31'
     HOLDING_PERIODS = [90]  # Test only 90
     
