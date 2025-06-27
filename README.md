@@ -6,19 +6,10 @@ This repository contains multiple implementations and approaches for the Black-L
 
 ## Files Description
 
-### 1. `Hybrid_view_generation.py`
-**Idea based on**: https://www.researchgate.net/publication/332174219_A_hybrid_approach_for_generating_investor_views_in_Black-Litterman_model
+### 1. `BlackLittermanNotebook.ipynb`
 
-**Main implementation** - A complete hybrid approach that replaces subjective investor views with ML predictions using a three-stage pipeline:
-- ARMA-GARCH forecasting of technical indicators
-- SVR (Support Vector Regression) for return prediction  
-- Black-Litterman optimization with PyPortfolioOpt
-- Comprehensive backtesting framework with visualization
-  
-**Results**: 3-5% annual outperformance vs market-cap benchmark
+**Main implementation** - A clean, notebook-style approach using PyPortfolioOpt throughout:
 
-### 2. `Black-Litterman Portfolio Backtesting`
-**Alternative implementation** - A cleaner, notebook-style approach using PyPortfolioOpt throughout:
 - Uses Dow Jones 30 stocks as investment universe
 - Custom set views on stock performance
 - Compares Black-Litterman vs Market-Cap vs Equal-Weight portfolios
@@ -26,7 +17,21 @@ This repository contains multiple implementations and approaches for the Black-L
 - Includes statistical significance testing and turnover analysis
 - More straightforward than the hybrid approach
 
-### 3. `Comparison.py`
+
+### 2. `Hybrid_view_generation.py`
+
+**Idea based on**: https://www.researchgate.net/publication/332174219_A_hybrid_approach_for_generating_investor_views_in_Black-Litterman_model
+
+**Alternative implementation** - A complete hybrid approach that replaces subjective investor views with ML predictions using a three-stage pipeline:
+- ARMA-GARCH forecasting of technical indicators
+- SVR (Support Vector Regression) for return prediction  
+- Black-Litterman optimization with PyPortfolioOpt
+- Comprehensive backtesting framework with visualization
+  
+**Results**: 3-5% annual outperformance vs market-cap benchmark
+
+### 3. `Comparison.ipynb`
+
 **Performance comparison notebook** - Visualizes and compares results:
 - Side-by-side comparison of different portfolio optimization approaches
 - Performance metrics comparison tables
@@ -35,7 +40,7 @@ This repository contains multiple implementations and approaches for the Black-L
 
 ## Testing & Results
 
-All implementations were tested on:
+Comparison was tested on:
 - **Period**: 2019-2024 (5 years)
 - **Assets**: Major US equities (tech, finance, healthcare, energy)
 - **Rebalancing**: Quarterly
